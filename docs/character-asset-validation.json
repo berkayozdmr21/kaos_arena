@@ -1,0 +1,26 @@
+[
+  {
+    "character": "Turquoise",
+    "mesh_parts": 14,
+    "height_m": 1.955,
+    "materials": true
+  },
+  {
+    "character": "Coral",
+    "mesh_parts": 14,
+    "height_m": 1.955,
+    "materials": true
+  },
+  {
+    "character": "Gold",
+    "mesh_parts": 14,
+    "height_m": 1.955,
+    "materials": true
+  },
+  {
+    "character": "Purple",
+    "mesh_parts": 14,
+    "height_m": 1.955,
+    "materials": true
+  }
+]

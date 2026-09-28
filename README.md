@@ -40,3 +40,8 @@ Ağ katmanı testi: .NET 6 SDK ile `dotnet run --project tests/NetworkTest.cspro
 Unity EXE testi: `Build/KaosArena.exe -batchmode -nographics -arenaSmoke -logFile smoke.log`.
 
 Unity önbellekleri, makineye özel ayarlar, ham günlükler ve tekrar üretilebilir geçici dosyalar repoya dahil edilmez. Karakterler henüz nihai modeller değildir; diğer sahalar, özelleştirme ve Steam yayını sonraki geliştirme kapsamındadır.
+
+## Karakter model dosyaları
+
+Dört karakterin FBX modelleri ve düzenlenebilir Blender kaynakları eklendi. [Karakter assetleri ve kullanım](docs/character-assets.md).
+
