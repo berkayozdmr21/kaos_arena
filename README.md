@@ -45,3 +45,8 @@ Unity önbellekleri, makineye özel ayarlar, ham günlükler ve tekrar üretileb
 
 Dört karakterin FBX modelleri ve düzenlenebilir Blender kaynakları eklendi. [Karakter assetleri ve kullanım](docs/character-assets.md).
 
+
+## 0.4 — On farklı futbolcu
+
+10 FBX model, Blender kaynakları, lobi karakter seçimi ve çakışmayan forma renkleri eklendi. [Güncel değişiklikler ve test durumu](docs/roster-v04.md). Yeni Windows EXE derlemesi ve oyun içi doğrulama bekliyor; mevcut v0.2 Windows paketi bu karakterleri içermez.
+

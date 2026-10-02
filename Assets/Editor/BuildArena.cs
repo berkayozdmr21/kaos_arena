@@ -5,6 +5,7 @@ using UnityEngine;
 public static class BuildArena {
     [MenuItem("Kaos Arena/Build Windows Test")]
     public static void Build() {
+        RosterAssets.Prepare();
         System.IO.Directory.CreateDirectory("Assets/Scenes");
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
         new GameObject("Kaos Arena").AddComponent<ArenaGame>();

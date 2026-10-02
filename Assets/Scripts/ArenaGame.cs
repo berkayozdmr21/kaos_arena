@@ -2,12 +2,13 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-[Serializable] public class ArenaInput { public string kind = "input"; public float x, z, yaw, power, lift; public int restartId; public bool jump, slide, shot, ready; public string name; }
+[Serializable] public class ArenaInput { public string kind = "input-roster-v1"; public float x, z, yaw, power, lift; public int restartId, characterId; public bool jump, slide, shot, ready; public string name; }
 [Serializable] public class ArenaState {
-    public string kind = "state"; public int you, phase; public string notice;
+    public string kind = "state-roster-v1"; public int you, phase; public string notice;
     public Vector3 ball; public Vector3[] positions = new Vector3[4]; public float[] angles = new float[4];
     public int[] lives = new int[4]; public string[] names = new string[4]; public bool[] ready = new bool[4]; public bool[] present = new bool[4];
     public int restartId; public float restartCountdown;
+    public int[] characters = new int[4], kits = new int[4];
     public bool holding; public float[] slidePose = new float[4]; public bool[] kicking = new bool[4];
     public float[] fallProgress = {-1,-1,-1,-1};
 }
@@ -26,6 +27,11 @@ public class ArenaGame : MonoBehaviour {
     readonly ArenaInput[] inputs = {new ArenaInput(),new ArenaInput(),new ArenaInput(),new ArenaInput()};
     readonly Transform[] avatars = new Transform[4], leftLeg = new Transform[4], rightLeg = new Transform[4], leftArm = new Transform[4], rightArm = new Transform[4];
     readonly Transform[] bodies = new Transform[4];
+    readonly Transform[] leftKnee=new Transform[4],rightKnee=new Transform[4],leftElbow=new Transform[4],rightElbow=new Transform[4];
+    readonly int[] shownCharacter={-1,-1,-1,-1},shownKit={-1,-1,-1,-1};
+    readonly float[] stride=new float[4],smoothMotion=new float[4];
+    int selectedCharacter,previewCharacter=-1,previewKit=-1;string kitSignature="";
+    GameObject previewModel;Camera previewCamera;RenderTexture previewTexture;
     readonly Vector3[] slideDirection = new Vector3[4];
     readonly CharacterController[] controllers = new CharacterController[4];
     readonly GameObject[] shutters = new GameObject[4];
@@ -40,7 +46,7 @@ public class ArenaGame : MonoBehaviour {
         Application.runInBackground = true; Application.targetFrameRate = 90; Time.fixedDeltaTime = .02f;
         white = Mat(new Color(.88f,.92f,.86f)); dark = Mat(new Color(.055f,.085f,.12f)); concrete = Mat(new Color(.23f,.27f,.3f));
         BuildArena(); BuildPlayers(); BuildBall();
-        cam = new GameObject("Match Camera").AddComponent<Camera>(); cam.fieldOfView = 65; cam.farClipPlane = 180;
+        cam = new GameObject("Match Camera").AddComponent<Camera>(); cam.cullingMask=~(1<<30);cam.fieldOfView = 65; cam.farClipPlane = 180;
         cam.gameObject.AddComponent<AudioListener>(); audioSource = gameObject.AddComponent<AudioSource>();
         state.notice = "KAOS ARENA";
     }
@@ -56,6 +62,18 @@ public class ArenaGame : MonoBehaviour {
         }
         if(Array.IndexOf(args,"-arenaSmoke")<0)yield break;
         yield return null;
+        try {
+            for(int id=0;id<ArenaRosterRules.Count;id++){
+                var test=ArenaRoster.Create(id,null,id);var renderers=test.GetComponentsInChildren<Renderer>();
+                var bounds=renderers[0].bounds;foreach(var r in renderers)bounds.Encapsulate(r.bounds);
+                Require(Mathf.Abs(bounds.size.y-1.95f)<.025f,"Equal visual height: "+ArenaRoster.Get(id).name);
+                Require(test.GetComponentsInChildren<Collider>().Length==0,"Cosmetic model has no gameplay hitbox: "+id);
+                ArenaRoster.Find(test.transform,"Knee_Left");ArenaRoster.Find(test.transform,"Elbow_Right");test.SetActive(false);ArenaRoster.DisposeVisual(test);
+            }
+            for(int i=0;i<4;i++)Require(Mathf.Approximately(controllers[i].height,1.85f)&&Mathf.Approximately(controllers[i].radius,.32f),"Shared controller dimensions: "+i);
+            var same=new[]{0,0,0,0};var active=new[]{true,true,true,true};var kits=ArenaRosterRules.AssignKits(same,active,null,3);
+            Require(new System.Collections.Generic.HashSet<int>(kits).Count==4,"Four copies receive four kit colors");
+        }catch(Exception e){Debug.LogError("ARENA_SMOKE_FAIL: "+e);Application.Quit(1);yield break;}
         Open(true,true);StartMatch();
         inputs[0].x=1;inputs[0].jump=inputs[0].slide=inputs[0].shot=true;
         yield return new WaitForFixedUpdate();
@@ -196,29 +214,63 @@ public class ArenaGame : MonoBehaviour {
         for(int i=0;i<4;i++) {
             var obj=new GameObject("Player "+(i+1));avatars[i]=obj.transform;obj.transform.position=Spawn(i);
             var cc=obj.AddComponent<CharacterController>();cc.height=1.85f;cc.radius=.32f;cc.center=new Vector3(0,.94f,0);cc.stepOffset=.25f;controllers[i]=cc;
-            var jersey=Mat(colors[i]); var skin=Mat(Color.Lerp(new Color(.36f,.19f,.12f),new Color(.85f,.61f,.43f),i/3f));
-            Shape("Jersey",PrimitiveType.Capsule,new Vector3(0,1.14f,0),new Vector3(.62f,.38f,.36f),jersey,obj.transform,false);
-            Shape("Head",PrimitiveType.Sphere,new Vector3(0,1.73f,0),new Vector3(.4f,.45f,.4f),skin,obj.transform,false);
-            Shape("Hair",PrimitiveType.Sphere,new Vector3(0,1.89f,-.025f),new Vector3(.41f,.2f,.38f),dark,obj.transform,false);
-            for(int side=-1;side<=1;side+=2) {
-                var leg=new GameObject("Leg pivot").transform;leg.SetParent(obj.transform,false);leg.localPosition=new Vector3(side*.16f,.8f,0);
-                Shape("Shorts",PrimitiveType.Capsule,new Vector3(0,-.13f,0),new Vector3(.25f,.22f,.28f),dark,leg,false);
-                Shape("Sock",PrimitiveType.Capsule,new Vector3(0,-.46f,0),new Vector3(.18f,.22f,.18f),white,leg,false);
-                Shape("Boot",PrimitiveType.Cube,new Vector3(0,-.69f,.08f),new Vector3(.22f,.15f,.39f),dark,leg,false);
-                var arm=new GameObject("Arm pivot").transform;arm.SetParent(obj.transform,false);arm.localPosition=new Vector3(side*.37f,1.38f,0);
-                Shape("Sleeve",PrimitiveType.Capsule,new Vector3(0,-.11f,0),new Vector3(.22f,.17f,.22f),jersey,arm,false);
-                Shape("Forearm",PrimitiveType.Capsule,new Vector3(0,-.35f,0),new Vector3(.15f,.16f,.15f),skin,arm,false);
-                if(side<0){leftLeg[i]=leg;leftArm[i]=arm;}else{rightLeg[i]=leg;rightArm[i]=arm;}
-            }
-            var label=new GameObject("Player name");label.transform.SetParent(obj.transform,false);label.transform.localPosition=new Vector3(0,2.2f,0);labels[i]=label.AddComponent<TextMesh>();labels[i].anchor=TextAnchor.MiddleCenter;labels[i].fontSize=48;labels[i].characterSize=.06f;labels[i].color=colors[i];
+            var label=new GameObject("Player name");label.transform.SetParent(obj.transform,false);label.transform.localPosition=new Vector3(0,2.2f,0);
+            labels[i]=label.AddComponent<TextMesh>();labels[i].anchor=TextAnchor.MiddleCenter;labels[i].fontSize=48;labels[i].characterSize=.045f;labels[i].color=colors[i];
             labels[i].font=Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");label.GetComponent<MeshRenderer>().sharedMaterial=labels[i].font.material;
-            Text((i+1).ToString(),new Vector3(0,1.2f,-.2f),.08f,Color.white,obj.transform);
-            // A separate visual pivot lets the whole body recline without rotating the controller or camera.
-            var parts=new List<Transform>();foreach(Transform child in obj.transform)if(child!=label.transform)parts.Add(child);
-            bodies[i]=new GameObject("Body pose").transform;bodies[i].SetParent(obj.transform,false);
-            foreach(var part in parts)part.SetParent(bodies[i],false);
-            obj.SetActive(false);
+            RebuildCharacter(i,i,i);obj.SetActive(false);
         }
+    }
+    void RebuildCharacter(int slot,int character,int kit){
+        if(bodies[slot]){bodies[slot].gameObject.SetActive(false);ArenaRoster.DisposeVisual(bodies[slot].gameObject);}
+        bodies[slot]=new GameObject("Body pose").transform;bodies[slot].SetParent(avatars[slot],false);
+        var model=ArenaRoster.Create(character,bodies[slot],kit).transform;
+        leftLeg[slot]=ArenaRoster.Wrap(ArenaRoster.Find(model,"Leg_Left"),bodies[slot]);
+        rightLeg[slot]=ArenaRoster.Wrap(ArenaRoster.Find(model,"Leg_Right"),bodies[slot]);
+        leftArm[slot]=ArenaRoster.Wrap(ArenaRoster.Find(model,"Arm_Left"),bodies[slot]);
+        rightArm[slot]=ArenaRoster.Wrap(ArenaRoster.Find(model,"Arm_Right"),bodies[slot]);
+        leftKnee[slot]=ArenaRoster.Wrap(ArenaRoster.Find(leftLeg[slot],"Knee_Left"),leftLeg[slot]);
+        rightKnee[slot]=ArenaRoster.Wrap(ArenaRoster.Find(rightLeg[slot],"Knee_Right"),rightLeg[slot]);
+        leftElbow[slot]=ArenaRoster.Wrap(ArenaRoster.Find(leftArm[slot],"Elbow_Left"),leftArm[slot]);
+        rightElbow[slot]=ArenaRoster.Wrap(ArenaRoster.Find(rightArm[slot],"Elbow_Right"),rightArm[slot]);
+        shownCharacter[slot]=character;shownKit[slot]=kit;
+    }
+    void ResolveKits(){
+        string signature="";for(int i=0;i<4;i++)signature+=state.present[i]+":"+state.characters[i]+";";
+        if(signature==kitSignature)return;kitSignature=signature;
+        state.kits=ArenaRosterRules.AssignKits(state.characters,state.present,state.kits,UnityEngine.Random.Range(0,int.MaxValue));
+    }
+    void UpdateRosterPreview(){
+        bool show=!menu&&state.phase==0&&localSlot>=0;
+        if(previewCamera)previewCamera.enabled=show;
+        if(!show)return;
+        if(!previewCamera){
+            previewTexture=new RenderTexture(512,512,24);previewTexture.name="Character selection";
+            previewCamera=new GameObject("Roster preview camera").AddComponent<Camera>();previewCamera.cullingMask=1<<30;
+            previewCamera.targetTexture=previewTexture;previewCamera.clearFlags=CameraClearFlags.SolidColor;previewCamera.backgroundColor=new Color(.055f,.09f,.13f);
+            previewCamera.transform.position=new Vector3(100,1.12f,3.8f);previewCamera.transform.LookAt(new Vector3(100,1.02f,0));previewCamera.fieldOfView=34;
+        }
+        int kit=state.characters[localSlot]==selectedCharacter?state.kits[localSlot]:selectedCharacter;
+        if(previewCharacter!=selectedCharacter||previewKit!=kit){
+            if(previewModel){previewModel.SetActive(false);ArenaRoster.DisposeVisual(previewModel);}
+            previewModel=ArenaRoster.Create(selectedCharacter,null,kit);previewModel.transform.position=new Vector3(100,0,0);
+            foreach(var child in previewModel.GetComponentsInChildren<Transform>(true))child.gameObject.layer=30;
+            previewCharacter=selectedCharacter;previewKit=kit;
+        }
+        previewModel.transform.rotation=Quaternion.Euler(0,Mathf.Sin(Time.unscaledTime*.55f)*22,0);
+    }
+    void DrawRosterPicker(){
+        if(localSlot<0)return;
+        Panel(new Rect(550,110,685,560));
+        GUI.Label(new Rect(575,120,600,35),"KARAKTERINI SEC  /  "+ArenaRoster.Get(selectedCharacter).name,titleStyle);
+        if(previewTexture)GUI.DrawTexture(new Rect(725,162,310,310),previewTexture,ScaleMode.ScaleToFit,false);
+        for(int id=0;id<ArenaRosterRules.Count;id++){
+            GUI.backgroundColor=selectedCharacter==id?ArenaRoster.KitColor(id):Color.white;
+            if(GUI.Button(new Rect(575+(id%5)*128,480+(id/5)*48,120,40),ArenaRoster.Get(id).name)){
+                selectedCharacter=id;inputs[localSlot].characterId=id;inputs[localSlot].ready=false;
+                if(host){state.characters[localSlot]=id;state.ready[localSlot]=false;ResolveKits();}
+            }
+        }GUI.backgroundColor=Color.white;
+        GUI.Label(new Rect(575,585,640,65),"10 karakter / Ayni boy, hiz ve fizik.\nAyni karakter secilirse forma rengi otomatik ayrilir.",bodyStyle);
     }
     void BuildBall() {
         var obj=Shape("Ball",PrimitiveType.Sphere,new Vector3(0,3,0),Vector3.one*.46f,white);
@@ -228,11 +280,11 @@ public class ArenaGame : MonoBehaviour {
     }
     Vector3 Spawn(int i) {return corners[i]*.71f+Vector3.up*.08f;}
     void Open(bool asHost,bool bots=false) {
-        Close();host=asHost;practice=bots;menu=false;state=new ArenaState();state.notice="Oyuncular bekleniyor";
+        Close();host=asHost;practice=bots;menu=false;state=new ArenaState();state.notice="Oyuncular bekleniyor";kitSignature="";
         for(int i=0;i<4;i++){inputs[i]=new ArenaInput();vertical[i]=slideUntil[i]=slideCooldown[i]=shotCooldown[i]=0;}
-        if(asHost) {localSlot=0;state.present[0]=true;state.names[0]=SafeName(playerName);state.lives[0]=3;
+        if(asHost) {localSlot=0;state.present[0]=true;state.names[0]=SafeName(playerName);state.lives[0]=3;state.characters[0]=selectedCharacter;inputs[0].characterId=selectedCharacter;
             for(int i=0;i<4;i++) {state.positions[i]=Spawn(i);state.angles[i]=Quaternion.LookRotation(-corners[i]).eulerAngles.y;}
-            if(bots){for(int i=1;i<4;i++){state.present[i]=true;state.ready[i]=true;state.names[i]="Bot "+i;state.lives[i]=3;}}
+            if(bots){for(int i=1;i<4;i++){state.present[i]=true;state.ready[i]=true;state.names[i]="Bot "+i;state.lives[i]=3;state.characters[i]=i;}}
         }
         if(!bots) {wire=new ArenaWire();try{if(asHost)wire.Host(Port);else wire.Join(address,Port);}catch(Exception e){status=e.Message;Close();}}
         yaw=asHost?state.angles[0]:0;status=asHost?"Lobi acik / TCP 7777":"Baglaniliyor...";
@@ -258,15 +310,16 @@ public class ArenaGame : MonoBehaviour {
             }
             try {
                 if(host && slots.TryGetValue(ev.peer,out int s)) {
-                    var input=JsonUtility.FromJson<ArenaInput>(ev.data);if(input==null||input.kind!="input")continue;
+                    var input=JsonUtility.FromJson<ArenaInput>(ev.data);if(input==null||input.kind!="input-roster-v1")continue;
                     if(!Finite(input.x)||!Finite(input.z)||!Finite(input.yaw)||!Finite(input.power)||!Finite(input.lift))continue;
+                    if(input.characterId<0||input.characterId>=ArenaRosterRules.Count)continue;
                     input.x=Mathf.Clamp(input.x,-1,1);input.z=Mathf.Clamp(input.z,-1,1);input.power=Mathf.Clamp01(input.power);input.lift=Mathf.Clamp01(input.lift);
                     if(state.phase==1&&(state.holding||input.restartId!=state.restartId)){input.x=input.z=0;input.shot=input.jump=input.slide=false;input.yaw=state.angles[s];}
                     else {if(inputs[s].shot&&!input.shot){input.power=inputs[s].power;input.lift=inputs[s].lift;}input.shot|=inputs[s].shot;input.jump|=inputs[s].jump;input.slide|=inputs[s].slide;}
                     inputs[s]=input;
-                    if(state.phase==0){state.ready[s]=input.ready;state.names[s]=SafeName(input.name);}
+                    if(state.phase==0){bool changed=state.characters[s]!=input.characterId;state.characters[s]=input.characterId;state.ready[s]=input.ready&&!changed;state.names[s]=SafeName(input.name);ResolveKits();}
                 } else if(!host) {
-                    var update=JsonUtility.FromJson<ArenaState>(ev.data);if(update==null||update.kind!="state"||update.you<0||update.you>3||update.positions.Length!=4)continue;
+                    var update=JsonUtility.FromJson<ArenaState>(ev.data);if(update==null||update.kind!="state-roster-v1"||update.you<0||update.you>3||update.positions.Length!=4)continue;
                     bool fresh=localSlot<0||state.restartId!=update.restartId;state=update;localSlot=state.you;
                     if(fresh){yaw=state.angles[localSlot];CancelCharge();for(int i=0;i<4;i++){controllers[i].enabled=false;avatars[i].position=state.positions[i];}}
                 }
@@ -276,9 +329,11 @@ public class ArenaGame : MonoBehaviour {
     bool Finite(float f) {return !float.IsNaN(f)&&!float.IsInfinity(f);}
     void Update() {
         Receive();
+        if(host&&state.phase==0)ResolveKits();
+        UpdateRosterPreview();
         if(!menu&&localSlot>=0) {
             if(Input.GetKeyDown(KeyCode.Escape)){paused=!paused;Cursor.lockState=paused?CursorLockMode.None:CursorLockMode.Locked;Cursor.visible=paused;}
-            var input=inputs[localSlot];input.name=SafeName(playerName);
+            var input=inputs[localSlot];input.name=SafeName(playerName);input.characterId=selectedCharacter;
             bool playing=state.phase==1&&state.lives[localSlot]>0&&!paused&&!state.holding&&(host?Time.time>=downUntil[localSlot]:state.fallProgress[localSlot]<0);
             input.x=playing?Input.GetAxisRaw("Horizontal"):0;input.z=playing?Input.GetAxisRaw("Vertical"):0;
             if(playing){Cursor.lockState=CursorLockMode.Locked;Cursor.visible=false;yaw+=Input.GetAxis("Mouse X")*2.5f;
@@ -297,14 +352,21 @@ public class ArenaGame : MonoBehaviour {
             bool visible=!menu&&state.present[i]&&(state.phase!=1||state.lives[i]>0);avatars[i].gameObject.SetActive(visible);
             shutters[i].SetActive(!menu&&state.phase!=0&&state.lives[i]<=0);
             if(!visible)continue;
+            if(shownCharacter[i]!=state.characters[i]||shownKit[i]!=state.kits[i])RebuildCharacter(i,state.characters[i],state.kits[i]);
             if(!host){controllers[i].enabled=false;avatars[i].position=Vector3.Lerp(avatars[i].position,state.positions[i],1-Mathf.Exp(-18*Time.deltaTime));avatars[i].rotation=Quaternion.Slerp(avatars[i].rotation,Quaternion.Euler(0,state.angles[i],0),1-Mathf.Exp(-18*Time.deltaTime));}
             float motion=state.holding?0:(host?new Vector2(inputs[i].x,inputs[i].z).magnitude:Mathf.Clamp01(Vector3.Distance(avatars[i].position,state.positions[i])*8));
-            float swing=Mathf.Sin(Time.time*13)*32*motion;
+            smoothMotion[i]=Mathf.MoveTowards(smoothMotion[i],motion,Time.deltaTime*7);stride[i]+=Time.deltaTime*13*smoothMotion[i];
+            float cycle=Mathf.Sin(stride[i]);float swing=cycle*32*smoothMotion[i];
+            leftKnee[i].localRotation=Quaternion.Euler(Mathf.Max(0,-cycle)*44*smoothMotion[i],0,0);
+            rightKnee[i].localRotation=Quaternion.Euler(Mathf.Max(0,cycle)*44*smoothMotion[i],0,0);
+            leftElbow[i].localRotation=Quaternion.Euler(-18-15*smoothMotion[i],0,0);rightElbow[i].localRotation=Quaternion.Euler(-18-15*smoothMotion[i],0,0);
             leftLeg[i].localRotation=Quaternion.Euler(swing,0,0);rightLeg[i].localRotation=Quaternion.Euler(-swing,0,0);
             leftArm[i].localRotation=Quaternion.Euler(-swing*.7f,0,-8);rightArm[i].localRotation=Quaternion.Euler(swing*.7f,0,8);
             if(host?Time.time<shotCooldown[i]:state.kicking[i])rightLeg[i].localRotation=Quaternion.Euler(-65,0,0);
             float slide=host?SlidePose(i):state.slidePose[i];ApplyBodyPose(i,slide);
             float fall=host?FallProgress(i):state.fallProgress[i];if(fall>=0)ApplyFallPose(i,fall);
+            else if(slide<.01f){bodies[i].localPosition+=Vector3.up*(Mathf.Abs(cycle)*.022f*smoothMotion[i]);bodies[i].localRotation=Quaternion.Euler(5*smoothMotion[i],0,-cycle*2*smoothMotion[i]);}
+            if(slide>.01f||fall>=0){leftKnee[i].localRotation=Quaternion.identity;rightKnee[i].localRotation=Quaternion.identity;}
             labels[i].text=state.names[i];labels[i].transform.rotation=cam.transform.rotation;
         }
         if(!host&&!menu)ball.position=Vector3.Lerp(ball.position,state.ball,1-Mathf.Exp(-20*Time.deltaTime));
@@ -397,6 +459,7 @@ public class ArenaGame : MonoBehaviour {
         if(input.shot){int target=(i+1)%4;for(int n=0;n<4;n++){int candidate=(i+1+n)%4;if(candidate!=i&&state.lives[candidate]>0){target=candidate;break;}}input.yaw=Quaternion.LookRotation(corners[target]-avatars[i].position).eulerAngles.y;}
     }
     void StartMatch() {
+        ResolveKits();
         state.phase=1;matchTime=0;for(int i=0;i<4;i++)state.lives[i]=3;
         ResetPlayers();ResetBall(new Vector3(0,3,0),"MAC BASLIYOR");
     }
@@ -442,11 +505,11 @@ public class ArenaGame : MonoBehaviour {
             GUILayout.Space(12);if(GUILayout.Button("ANTRENMAN  •  3 BOT",buttonStyle))Open(true,true);
             GUILayout.Space(12);GUILayout.Label(status,bodyStyle);GUILayout.Label("Internet testi: port yonlendirme veya ortak sanal ag gerekir.",bodyStyle);GUILayout.EndArea();
         }else if(state.phase==0){Panel(new Rect(45,125,470,545));GUILayout.BeginArea(new Rect(72,148,416,500));GUILayout.Label(localSlot<0?"BAGLANILIYOR":"MAC LOBISI",titleStyle);
-            int ready=0;for(int i=0;i<4;i++){GUI.color=colors[i];GUILayout.Label((i+1)+"  "+(state.present[i]?state.names[i]+(state.ready[i]?"  / HAZIR":"  / BEKLIYOR"):"Bos yer"),bodyStyle);if(state.present[i]&&state.ready[i])ready++;}GUI.color=Color.white;
+            int ready=0;for(int i=0;i<4;i++){GUI.color=colors[i];GUILayout.Label((i+1)+"  "+(state.present[i]?state.names[i]+" / "+ArenaRoster.Get(state.characters[i]).name+(state.ready[i]?"  / HAZIR":"  / BEKLIYOR"):"Bos yer"),bodyStyle);if(state.present[i]&&state.ready[i])ready++;}GUI.color=Color.white;
             GUILayout.Space(20);if(localSlot>=0&&GUILayout.Button(inputs[localSlot].ready?"HAZIR DEGILIM":"HAZIRIM",buttonStyle)){inputs[localSlot].ready=!inputs[localSlot].ready;if(host)state.ready[0]=inputs[0].ready;}
             if(host){GUI.enabled=ready==4;if(GUILayout.Button("MACI BASLAT",buttonStyle))StartMatch();GUI.enabled=true;}
             GUILayout.Space(16);GUILayout.Label("4 oyuncu hazir olunca host baslatir.\nWASD: hareket / Fare: kamera\nSol tik basili tut: sut gucu\nSag tik: kayma / Space: zipla",bodyStyle);
-            if(GUILayout.Button("ANA MENU",buttonStyle)){status="Lobiden ayrildin";Close();}GUILayout.EndArea();
+            if(GUILayout.Button("ANA MENU",buttonStyle)){status="Lobiden ayrildin";Close();}GUILayout.EndArea();DrawRosterPicker();
         }else{
             for(int i=0;i<4;i++){GUI.color=colors[i];GUI.Box(new Rect(25+i*312,94,300,55),state.names[i]+"    "+(state.lives[i]>0?new string('|',state.lives[i]):"ELENDI"));}GUI.color=Color.white;
             GUI.Label(new Rect(32,654,1100,42),state.notice+"   |   WASD / Sol tik: sut / Sag tik: kay / Space: zipla / Esc: menu",bodyStyle);
@@ -460,6 +523,7 @@ public class ArenaGame : MonoBehaviour {
     }
     void Panel(Rect r){GUI.color=new Color(.035f,.065f,.10f,.95f);GUI.DrawTexture(r,Texture2D.whiteTexture);GUI.color=Color.white;}
     void OnApplicationQuit(){wire?.Dispose();}
+    void OnDestroy(){wire?.Dispose();if(previewModel)ArenaRoster.DisposeVisual(previewModel);if(previewCamera)Destroy(previewCamera.gameObject);if(previewTexture){previewTexture.Release();Destroy(previewTexture);}}
 }
 
 public class ArenaGoal : MonoBehaviour {

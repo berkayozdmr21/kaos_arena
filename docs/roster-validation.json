@@ -1,0 +1,62 @@
+[
+  {
+    "id": "Atlas",
+    "height": 1.95,
+    "meshes": 67,
+    "joints": 8
+  },
+  {
+    "id": "Kaya",
+    "height": 1.95,
+    "meshes": 82,
+    "joints": 8
+  },
+  {
+    "id": "Lina",
+    "height": 1.95,
+    "meshes": 73,
+    "joints": 8
+  },
+  {
+    "id": "Bora",
+    "height": 1.95,
+    "meshes": 69,
+    "joints": 8
+  },
+  {
+    "id": "Mira",
+    "height": 1.95,
+    "meshes": 66,
+    "joints": 8
+  },
+  {
+    "id": "Efe",
+    "height": 1.95,
+    "meshes": 68,
+    "joints": 8
+  },
+  {
+    "id": "Zara",
+    "height": 1.95,
+    "meshes": 82,
+    "joints": 8
+  },
+  {
+    "id": "Aras",
+    "height": 1.95,
+    "meshes": 68,
+    "joints": 8
+  },
+  {
+    "id": "Deniz",
+    "height": 1.95,
+    "meshes": 68,
+    "joints": 8
+  },
+  {
+    "id": "Ruzgar",
+    "height": 1.95,
+    "meshes": 67,
+    "joints": 8
+  }
+]
