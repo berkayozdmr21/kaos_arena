@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 // Appearance only. No per-character speed, hitbox, reach or physics values exist here.
 public static class ArenaRosterRules {
-    public const int Count=10;
+    public const int Count=15;
     public static int Clamp(int id){return Math.Max(0,Math.Min(Count-1,id));}
     public static int[] AssignKits(int[] characters,bool[] present,int[] previous,int seed){
         var reserved=new HashSet<int>();var used=new HashSet<int>();var seen=new HashSet<int>();var rng=new Random(seed);

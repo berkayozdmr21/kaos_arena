@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-[Serializable] public class ArenaInput { public string kind = "input-roster-v1"; public float x, z, yaw, power, lift; public int restartId, characterId; public bool jump, slide, shot, ready; public string name; }
+[Serializable] public class ArenaInput { public string kind = "input-beach-v1"; public float x, z, yaw, power, lift; public int restartId, characterId; public bool jump, slide, shot, ready; public string name; }
 [Serializable] public class ArenaState {
-    public string kind = "state-roster-v1"; public int you, phase; public string notice;
+    public string kind = "state-beach-v1"; public int you, phase, arenaId; public string notice;
     public Vector3 ball; public Vector3[] positions = new Vector3[4]; public float[] angles = new float[4];
     public int[] lives = new int[4]; public string[] names = new string[4]; public bool[] ready = new bool[4]; public bool[] present = new bool[4];
     public int restartId; public float restartCountdown;
@@ -42,10 +42,17 @@ public class ArenaGame : MonoBehaviour {
     string address = "127.0.0.1", playerName = "Oyuncu", status = "Ilk saha / Windows test surumu";
     GUIStyle titleStyle, bodyStyle, buttonStyle; AudioSource audioSource;
 
+    int selectedArena,shownArena=-1; ArenaBeach beach; readonly List<GameObject> neighborhood=new List<GameObject>();
+    void ApplyArena(int id){
+        id=Mathf.Clamp(id,0,1);if(shownArena==id)return;shownArena=id;
+        foreach(var o in neighborhood)if(o)o.SetActive(id==0);
+        if(id==1){if(!beach){beach=new GameObject("Beach scenery").AddComponent<ArenaBeach>();beach.Build();}beach.gameObject.SetActive(true);beach.ApplySurface();}
+        else {if(beach){beach.RestoreAtmosphere();beach.gameObject.SetActive(false);}GameObject.Find("Octagonal corner-goal pitch").GetComponent<Renderer>().sharedMaterial=Mat(new Color(.12f,.32f,.33f));var f=GameObject.Find("Neighborhood foundation");f.transform.localScale=new Vector3(80,.7f,80);f.GetComponent<Renderer>().sharedMaterial=concrete;}
+    }
     void Awake() {
         Application.runInBackground = true; Application.targetFrameRate = 90; Time.fixedDeltaTime = .02f;
         white = Mat(new Color(.88f,.92f,.86f)); dark = Mat(new Color(.055f,.085f,.12f)); concrete = Mat(new Color(.23f,.27f,.3f));
-        BuildArena(); BuildPlayers(); BuildBall();
+        BuildArena(); BuildPlayers(); BuildBall(); ApplyArena(0);
         cam = new GameObject("Match Camera").AddComponent<Camera>(); cam.cullingMask=~(1<<30);cam.fieldOfView = 65; cam.farClipPlane = 180;
         cam.gameObject.AddComponent<AudioListener>(); audioSource = gameObject.AddComponent<AudioSource>();
         state.notice = "KAOS ARENA";
@@ -53,8 +60,9 @@ public class ArenaGame : MonoBehaviour {
     System.Collections.IEnumerator Start() {
         var args=Environment.GetCommandLineArgs();
         if(Array.IndexOf(args,"-arenaCapture")>=0){
-            Open(true,true);StartMatch();yield return null;
+            if(Array.IndexOf(args,"-beach")>=0)selectedArena=1;Open(true,true);StartMatch();yield return null;
             CaptureView("arena-preview.png",new Vector3(21,23,-25),Vector3.zero);
+            if(beach){beach.Animate(4);beach.Burst();yield return new WaitForSeconds(.65f);CaptureView("beach-sea-preview.png",new Vector3(-17,8,-17),new Vector3(17,0,3));}
             CaptureView("goal-preview.png",corners[0]-corners[0].normalized*6+Vector3.up*3,corners[0]+Vector3.up);
             ApplyBodyPose(0,1);CaptureView("slide-preview.png",Spawn(0)+new Vector3(3,1.5f,-1),Spawn(0)+Vector3.up*.6f);
             ApplyFallPose(0,.38f);CaptureView("fall-preview.png",Spawn(0)+new Vector3(3,1.7f,-1),Spawn(0)+Vector3.up*.5f);
@@ -74,13 +82,14 @@ public class ArenaGame : MonoBehaviour {
             var same=new[]{0,0,0,0};var active=new[]{true,true,true,true};var kits=ArenaRosterRules.AssignKits(same,active,null,3);
             Require(new System.Collections.Generic.HashSet<int>(kits).Count==4,"Four copies receive four kit colors");
         }catch(Exception e){Debug.LogError("ARENA_SMOKE_FAIL: "+e);Application.Quit(1);yield break;}
-        Open(true,true);StartMatch();
+        if(Array.IndexOf(args,"-beach")>=0)selectedArena=1;Open(true,true);StartMatch();
         inputs[0].x=1;inputs[0].jump=inputs[0].slide=inputs[0].shot=true;
         yield return new WaitForFixedUpdate();
         Require(state.holding&&ball.isKinematic,"Kickoff held before release");
         Require(Vector3.Distance(avatars[0].position,Spawn(0))<.01f,"Movement locked before release");
         yield return new WaitForSeconds(2.4f);
         try {
+            if(selectedArena==1){Require(beach&&beach.GetComponentsInChildren<Collider>().Length==0,"Sea scenery has no gameplay collision");Require(GameObject.Find("Octagonal corner-goal pitch").GetComponent<MeshCollider>()!=null,"Sand retains shared floor collision");}
             Require(ball.position.y<2.5f,"Ball falls under gravity");
             for(int i=0;i<4;i++)Require(avatars[i].position.y>-.2f,"Player stays above floor "+i);
             // Exercise the authoritative tackle path, including protection against repeated hits.
@@ -144,7 +153,7 @@ public class ArenaGame : MonoBehaviour {
         var vertices = new List<Vector3> {Vector3.zero};
         vertices.AddRange(new [] {new Vector3(-10,0,-14),new Vector3(10,0,-14),new Vector3(14,0,-10),new Vector3(14,0,10),new Vector3(10,0,14),new Vector3(-10,0,14),new Vector3(-14,0,10),new Vector3(-14,0,-10)});
         var tris = new List<int>(); for(int i=0;i<8;i++) {tris.Add(0);tris.Add(1+(i+1)%8);tris.Add(1+i);}
-        var mesh = new Mesh {vertices=vertices.ToArray(),triangles=tris.ToArray()}; mesh.RecalculateNormals();
+        var mesh = new Mesh {vertices=vertices.ToArray(),triangles=tris.ToArray()}; mesh.RecalculateNormals();var uv=new Vector2[vertices.Count];for(int i=0;i<uv.Length;i++)uv[i]=new Vector2(vertices[i].x/28+.5f,vertices[i].z/28+.5f);mesh.uv=uv;
         var ground = new GameObject("Octagonal corner-goal pitch"); ground.AddComponent<MeshFilter>().sharedMesh=mesh; ground.AddComponent<MeshRenderer>().sharedMaterial=Mat(new Color(.12f,.32f,.33f)); ground.AddComponent<MeshCollider>().sharedMesh=mesh;
         var bounce = new PhysicMaterial("Angle-based wall rebound") {bounciness=.72f,dynamicFriction=.2f,staticFriction=.2f,bounceCombine=PhysicMaterialCombine.Maximum};
         for(int i=0;i<4;i++) {
@@ -173,7 +182,7 @@ public class ArenaGame : MonoBehaviour {
             float a=i*Mathf.PI*2/20, h=5+(float)rand.NextDouble()*10; Vector3 p=new Vector3(Mathf.Sin(a)*29,h/2,Mathf.Cos(a)*29);
             // Keep the parent unscaled: facade dimensions must not inherit the building mesh scale.
             var building=new GameObject("Neighborhood building");building.transform.position=p;
-            building.transform.rotation=Quaternion.LookRotation(p.normalized);
+            neighborhood.Add(building);building.transform.rotation=Quaternion.LookRotation(p.normalized);
             Shape("Building shell",PrimitiveType.Cube,Vector3.zero,new Vector3(6,h,6),Mat(Color.Lerp(new Color(.22f,.32f,.4f),new Color(.72f,.46f,.32f),(float)rand.NextDouble())),building.transform);
             var glass=Mat(new Color(.64f,.79f,.84f));
             for(int y=0;y<(int)h/2;y++) for(int x=-1;x<=1;x++) Shape("Window",PrimitiveType.Cube,new Vector3(x*1.3f,y*1.8f-h/2+1.2f,-3.025f),new Vector3(.7f,.8f,.035f),glass,building.transform,false);
@@ -265,12 +274,12 @@ public class ArenaGame : MonoBehaviour {
         if(previewTexture)GUI.DrawTexture(new Rect(725,162,310,310),previewTexture,ScaleMode.ScaleToFit,false);
         for(int id=0;id<ArenaRosterRules.Count;id++){
             GUI.backgroundColor=selectedCharacter==id?ArenaRoster.KitColor(id):Color.white;
-            if(GUI.Button(new Rect(575+(id%5)*128,480+(id/5)*48,120,40),ArenaRoster.Get(id).name)){
+            if(GUI.Button(new Rect(575+(id%5)*128,472+(id/5)*42,120,36),ArenaRoster.Get(id).name)){
                 selectedCharacter=id;inputs[localSlot].characterId=id;inputs[localSlot].ready=false;
                 if(host){state.characters[localSlot]=id;state.ready[localSlot]=false;ResolveKits();}
             }
         }GUI.backgroundColor=Color.white;
-        GUI.Label(new Rect(575,585,640,65),"10 karakter / Ayni boy, hiz ve fizik.\nAyni karakter secilirse forma rengi otomatik ayrilir.",bodyStyle);
+        GUI.Label(new Rect(575,585,640,65),"15 karakter / Ayni boy, hiz ve fizik.\nAyni karakter secilirse forma rengi otomatik ayrilir.",bodyStyle);
     }
     void BuildBall() {
         var obj=Shape("Ball",PrimitiveType.Sphere,new Vector3(0,3,0),Vector3.one*.46f,white);
@@ -280,7 +289,7 @@ public class ArenaGame : MonoBehaviour {
     }
     Vector3 Spawn(int i) {return corners[i]*.71f+Vector3.up*.08f;}
     void Open(bool asHost,bool bots=false) {
-        Close();host=asHost;practice=bots;menu=false;state=new ArenaState();state.notice="Oyuncular bekleniyor";kitSignature="";
+        Close();host=asHost;practice=bots;menu=false;state=new ArenaState();state.arenaId=asHost?selectedArena:0;ApplyArena(state.arenaId);state.notice="Oyuncular bekleniyor";kitSignature="";
         for(int i=0;i<4;i++){inputs[i]=new ArenaInput();vertical[i]=slideUntil[i]=slideCooldown[i]=shotCooldown[i]=0;}
         if(asHost) {localSlot=0;state.present[0]=true;state.names[0]=SafeName(playerName);state.lives[0]=3;state.characters[0]=selectedCharacter;inputs[0].characterId=selectedCharacter;
             for(int i=0;i<4;i++) {state.positions[i]=Spawn(i);state.angles[i]=Quaternion.LookRotation(-corners[i]).eulerAngles.y;}
@@ -310,7 +319,7 @@ public class ArenaGame : MonoBehaviour {
             }
             try {
                 if(host && slots.TryGetValue(ev.peer,out int s)) {
-                    var input=JsonUtility.FromJson<ArenaInput>(ev.data);if(input==null||input.kind!="input-roster-v1")continue;
+                    var input=JsonUtility.FromJson<ArenaInput>(ev.data);if(input==null||input.kind!="input-beach-v1")continue;
                     if(!Finite(input.x)||!Finite(input.z)||!Finite(input.yaw)||!Finite(input.power)||!Finite(input.lift))continue;
                     if(input.characterId<0||input.characterId>=ArenaRosterRules.Count)continue;
                     input.x=Mathf.Clamp(input.x,-1,1);input.z=Mathf.Clamp(input.z,-1,1);input.power=Mathf.Clamp01(input.power);input.lift=Mathf.Clamp01(input.lift);
@@ -319,7 +328,7 @@ public class ArenaGame : MonoBehaviour {
                     inputs[s]=input;
                     if(state.phase==0){bool changed=state.characters[s]!=input.characterId;state.characters[s]=input.characterId;state.ready[s]=input.ready&&!changed;state.names[s]=SafeName(input.name);ResolveKits();}
                 } else if(!host) {
-                    var update=JsonUtility.FromJson<ArenaState>(ev.data);if(update==null||update.kind!="state-roster-v1"||update.you<0||update.you>3||update.positions.Length!=4)continue;
+                    var update=JsonUtility.FromJson<ArenaState>(ev.data);if(update==null||update.kind!="state-beach-v1"||update.you<0||update.you>3||update.positions.Length!=4)continue;
                     bool fresh=localSlot<0||state.restartId!=update.restartId;state=update;localSlot=state.you;
                     if(fresh){yaw=state.angles[localSlot];CancelCharge();for(int i=0;i<4;i++){controllers[i].enabled=false;avatars[i].position=state.positions[i];}}
                 }
@@ -329,6 +338,7 @@ public class ArenaGame : MonoBehaviour {
     bool Finite(float f) {return !float.IsNaN(f)&&!float.IsInfinity(f);}
     void Update() {
         Receive();
+        ApplyArena(menu?selectedArena:state.arenaId);
         if(host&&state.phase==0)ResolveKits();
         UpdateRosterPreview();
         if(!menu&&localSlot>=0) {
@@ -497,8 +507,9 @@ public class ArenaGame : MonoBehaviour {
         if(titleStyle==null){titleStyle=new GUIStyle(GUI.skin.label){fontSize=38,fontStyle=FontStyle.Bold};bodyStyle=new GUIStyle(GUI.skin.label){fontSize=17,wordWrap=true};buttonStyle=new GUIStyle(GUI.skin.button){fontSize=19,fixedHeight=44};}
         GUI.matrix=Matrix4x4.TRS(Vector3.zero,Quaternion.identity,new Vector3(Screen.width/1280f,Screen.height/720f,1));
         GUI.color=new Color(.03f,.06f,.1f,.94f);GUI.DrawTexture(new Rect(0,0,1280,82),Texture2D.whiteTexture);GUI.color=Color.white;
-        GUI.Label(new Rect(28,18,480,54),"KAOS / ARENA",titleStyle);GUI.Label(new Rect(935,29,320,35),"MAHALLE 01  •  PROTOTIP",bodyStyle);
+        GUI.Label(new Rect(28,18,480,54),"KAOS / ARENA",titleStyle);GUI.Label(new Rect(935,29,320,35),(shownArena==1?"SAHIL 02":"MAHALLE 01")+"  /  PROTOTIP",bodyStyle);
         if(menu){Panel(new Rect(45,125,470,545));GUILayout.BeginArea(new Rect(72,148,416,500));GUILayout.Label("DORT KALE. TEK KAZANAN.",bodyStyle);GUILayout.Space(20);GUILayout.Label("Oyuncu adi (10 karakter)",bodyStyle);playerName=GUILayout.TextField(playerName,10,GUILayout.Height(34));GUILayout.Space(12);
+            GUILayout.Label("SAHA SECIMI",bodyStyle);selectedArena=GUILayout.SelectionGrid(selectedArena,new[]{"MAHALLE","SAHIL / KUM"},2);
             if(GUILayout.Button("LOBI OLUSTUR",buttonStyle))Open(true);
             GUILayout.Space(12);GUILayout.Label("Host IP adresi / TCP 7777",bodyStyle);address=GUILayout.TextField(address,100,GUILayout.Height(34));
             if(GUILayout.Button("LOBIYE KATIL",buttonStyle))Open(false);

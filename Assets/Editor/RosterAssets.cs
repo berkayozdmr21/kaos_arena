@@ -4,7 +4,7 @@ using UnityEditor;
 using UnityEngine;
 
 public static class RosterAssets {
-    [MenuItem("Kaos Arena/Prepare Ten Character Assets")]
+    [MenuItem("Kaos Arena/Prepare Character Assets")]
     public static void Prepare(){
         Directory.CreateDirectory("Assets/Characters/RosterPrefabs");
         AssetDatabase.Refresh();
@@ -18,6 +18,6 @@ public static class RosterAssets {
             finally{UnityEngine.Object.DestroyImmediate(obj);}
         }
         AssetDatabase.SaveAssets();
-        Debug.Log("Ten footballer models and joint hierarchies verified; reusable visual prefabs saved.");
+        Debug.Log("All footballer models and joint hierarchies verified; reusable visual prefabs saved.");
     }
 }

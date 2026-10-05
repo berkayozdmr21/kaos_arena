@@ -1,5 +1,5 @@
 """Blender 4.4 --background --factory-startup --python tools/build_roster.py
-Ten equally sized original stylized footballers. No gameplay colliders in model assets.
+Equally sized original stylized footballers. No gameplay colliders in model assets.
 """
 import bpy, math, json, pathlib, sys
 from mathutils import Vector
@@ -38,14 +38,18 @@ def make(c,index):
     skin=mat('Skin',c['skin']);hair=mat('Hair',c['hair']);jersey=mat('Jersey_Main',c['jersey']);accent=mat('Jersey_Accent',c['accent'])
     dark=mat('Dark',(.025,.035,.05));white=mat('White',(.95,.97,.95));iris=mat('Iris',[(.09,.15,.08),(.08,.17,.26),(.21,.10,.03)][index%3])
     # Same skeleton, shoulder span and leg dimensions for the entire roster.
-    part('Torso',(0,1.07,0),(.57,.49,.34),jersey,body,'box')
-    part('Waist',(0,.84,0),(.50,.11,.32),jersey,body,'box')
+    if index>=10:
+        part('FittedTorso',(0,1.075,0),(.46,.47,.31),jersey,body)
+        part('FittedWaist',(0,.94,0),(.37,.22,.29),jersey,body)
+        for side in (-1,1):part('TailoredChest',(side*.105,1.19,.075),(.27,.23,.30),jersey,body)
+    else:part('Torso',(0,1.07,0),(.57,.49,.34),jersey,body,'box')
+    part('Waist',(0,.84,0),(.43 if index>=10 else .50,.11,.32),jersey,body,'box')
     part('Collar',(0,1.31,0),(.26,.055,.24),accent,body)
     part('Neck',(0,1.36,0),(.19,.16,.19),skin,body)
     # Face variants change cheeks and expression, never the top of the head or collision shape.
     head=pivot('Head_Pivot',(0,1.62,0),body)
-    part('Head',(0,0,0),(.57+(index%3)*.016,.59,.51),skin,head)
-    part('Jaw',(0,-.16,.02),(.40+(index%2)*.04,.20,.39),skin,head)
+    part('Head',(0,0,0),(.53 if index>=10 else .57+(index%3)*.016,.59,.51),skin,head)
+    part('Jaw',(0,-.16,.02),(.35 if index>=10 else .40+(index%2)*.04,.18 if index>=10 else .20,.39),skin,head)
     for side in (-1,1):
         part('Ear',(side*.29,-.015,0),(.105,.17,.10),skin,head)
         part('EarInset',(side*.322,-.016,.02),(.028,.085,.055),accent if index==8 else skin,head)
@@ -54,13 +58,13 @@ def make(c,index):
         part('Iris',(side*eyeX,ey,.254),(.064,.080,.019),iris,head)
         part('Pupil',(side*eyeX,ey,.265),(.036,.055,.012),dark,head)
         part('EyeHighlight',(side*eyeX-.009,ey+.018,.272),(.014,.019,.009),white,head)
-        part('Eyebrow',(side*eyeX,.116,.228),(.154,.035,.043),hair,head,'box',side*(.09+(index%4)*.045))
-    part('Nose',(0,-.032,.274),(.09+(index%3)*.012,.12,.075),skin,head)
+        part('Eyebrow',(side*eyeX,.116,.228),(.135,.021 if index>=10 else .035,.035),hair,head,'box',side*(.09+(index%4)*.045))
+    part('Nose',(0,-.032,.274),(.072 if index>=10 else .09+(index%3)*.012,.10 if index>=10 else .12,.065 if index>=10 else .075),skin,head)
     part('Mouth',(0,-.142,.211),(.13+(index%3)*.012,.016,.024),dark,head)
     if index in (1,3,7):
         part('Beard',(0,-.203,.14),(.31,.115,.22),hair,head)
         part('Moustache',(0,-.117,.238),(.18,.028,.025),hair,head)
-    if index in (2,4,8):
+    if index in (2,4,8) or index>=10:
         blush=mat('Cheek',tuple(v*.88 for v in c['skin']))
         for s in (-1,1):part('Cheek',(s*.20,-.073,.202),(.055,.028,.015),blush,head)
     # A common 1.95m crown envelope; ten distinct silhouettes inside it.
@@ -90,6 +94,32 @@ def make(c,index):
     elif style==7:
         part('Band',(0,.185,.17),(.54,.068,.15),accent,head)
         for n in range(5):part('CentreSpikes',(0,.26,-.10+n*.06),(.15,.14,.105),hair,head)
+    elif style>=10:
+        lipstick=mat('Lipstick',[(.65,.08,.17),(.72,.20,.29),(.40,.055,.10),(.53,.08,.26),(.70,.12,.085)][style-10])
+        blush=mat('MakeupBlush',(.65,.24,.25))
+        part('UpperLip',(0,-.136,.239),(.132,.027,.025),lipstick,head)
+        part('LowerLip',(0,-.157,.237),(.112,.029,.026),lipstick,head)
+        for side in (-1,1):
+            part('Blush',(side*.19,-.075,.217),(.072,.038,.013),blush,head)
+            for n in range(3):part('Eyelash',(side*(.15+n*.017),.077+n*.007,.264),(.04,.011,.016),dark,head,'box',side*.4)
+        # Long layered hair stays behind the torso and away from limb pivots.
+        if style in (10,11,14):
+            part('LongHairBack',(0,-.13,-.235),(.56,.80,.19),hair,head)
+            for side in (-1,1):
+                for n in range(3):
+                    part('LongSideLock',(side*(.255+n*.009),-.035-n*.18,-.045),(.12,.34,.17),hair,head,angle=side*.08)
+            part('SweptFringe',(-.10,.17,.20),(.35,.105,.07),hair,head,angle=.2)
+            if style==14:
+                for n in range(5):part('Wave',(.27,-.08-n*.09,-.04),(.13,.16,.18),hair,head)
+        elif style==12:
+            for side in (-1,1):
+                for n in range(9):part('LongBraid',(side*.28,.11-n*.065,-.045),(.105,.10,.10),hair,head)
+                part('BraidRibbon',(side*.28,-.44,-.045),(.14,.04,.12),accent,head)
+            part('Headband',(0,.19,.18),(.53,.045,.11),accent,head)
+        else:
+            for n in range(8):part('LongCurlyPonytail',(.27,.12-n*.073,-.20),(.20,.17,.20),hair,head)
+            for n in range(7):part('CrownCurl',((n-3)*.07,.23,.04),(.13,.15,.22),hair,head)
+            part('PonyRibbon',(.25,.12,-.21),(.23,.06,.22),accent,head)
     else:
         for n in range(6):part('SideSweep',(-.17+n*.065,.24,.10),(.17,.16,.29),hair,head,angle=-.25)
         part('SideClip',(.25,.16,.10),(.022,.15,.08),accent,head)
@@ -116,12 +146,19 @@ def make(c,index):
         knee=pivot('Knee_'+suffix,(0,-.34,0),leg)
         part('Sock_'+suffix,(0,-.16,0),(.19,.33,.19),accent,knee)
         part('SockBand_'+suffix,(0,-.045,0),(.195,.04,.195),white,knee)
-        part('Boot_'+suffix,(0,-.35,.06),(.24,.16,.38),white,knee,'box')
-        part('Sole_'+suffix,(0,-.414,.06),(.24,.025,.38),dark,knee,'box')
-        for n in range(3):part('Lace_'+suffix,(0,-.291,.085+n*.043),(.14,.009,.016),dark,knee,'box')
+        if index in (11,14):
+            # Heel and toe share the original sole plane; no extra height or collider.
+            part('HeelShoeUpper_'+suffix,(0,-.325,.05),(.21,.11,.31),jersey,knee,'box')
+            part('ToeSole_'+suffix,(0,-.405,.17),(.215,.045,.14),dark,knee,'box')
+            part('BlockHeel_'+suffix,(0,-.383,-.06),(.095,.085,.095),dark,knee,'box')
+            part('AnkleStrap_'+suffix,(0,-.28,0),(.205,.034,.205),accent,knee)
+        else:
+            part('Boot_'+suffix,(0,-.35,.06),(.24,.16,.38),white,knee,'box')
+            part('Sole_'+suffix,(0,-.414,.06),(.24,.025,.38),dark,knee,'box')
+            for n in range(3):part('Lace_'+suffix,(0,-.291,.085+n*.043),(.14,.009,.016),dark,knee,'box')
         arm=pivot('Arm_'+suffix,(s*.35,1.24,0),body)
-        part('Sleeve_'+suffix,(0,-.075,0),(.235,.22,.25),jersey,arm,'box')
-        part('SleeveCuff_'+suffix,(0,-.17,0),(.24,.045,.253),accent,arm,'box')
+        part('Sleeve_'+suffix,(0,-.075,0),(.19 if index>=10 else .235,.22,.23 if index>=10 else .25),jersey,arm,'box')
+        part('SleeveCuff_'+suffix,(0,-.17,0),(.195 if index>=10 else .24,.045,.235 if index>=10 else .253),accent,arm,'box')
         part('UpperArm_'+suffix,(0,-.235,0),(.16,.18,.17),skin,arm)
         elbow=pivot('Elbow_'+suffix,(0,-.30,0),arm)
         part('Forearm_'+suffix,(0,-.09,.01),(.15,.20,.16),skin,elbow)
@@ -136,5 +173,7 @@ def make(c,index):
     bpy.ops.export_scene.fbx(filepath=str(MODELS/(c['id']+'.fbx')),use_selection=True,object_types={'MESH','EMPTY'},axis_forward='-Z',axis_up='Y',apply_unit_scale=True,bake_anim=False,add_leaf_bones=False)
     print('ROSTER_EXPORT',c['id'],len(meshes),flush=True)
 
-for i,c in enumerate(spec):make(c,i)
+selected=sys.argv[sys.argv.index('--')+1:] if '--' in sys.argv else []
+for i,c in enumerate(spec):
+    if not selected or c['id'] in selected:make(c,i)
 print('ROSTER_EXPORT_PASS',flush=True)

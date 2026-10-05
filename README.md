@@ -50,3 +50,11 @@ Dört karakterin FBX modelleri ve düzenlenebilir Blender kaynakları eklendi. [
 
 10 FBX model, Blender kaynakları, lobi karakter seçimi ve çakışmayan forma renkleri eklendi. [Güncel değişiklikler ve test durumu](docs/roster-v04.md). Yeni Windows EXE derlemesi ve oyun içi doğrulama bekliyor; mevcut v0.2 Windows paketi bu karakterleri içermez.
 
+
+## 0.5 - 15 character roster
+
+Five additional women footballers; existing gameplay preserved. [Changes and validation](docs/women-v05.md). New Unity build pending.
+
+## 0.6 - Beach court
+
+Second selectable sand arena with animated sea and periodic spray. [Changes, preview provenance and test status](docs/beach-v06.md). New Unity EXE and gameplay test pending.

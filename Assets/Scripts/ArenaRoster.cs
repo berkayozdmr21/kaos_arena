@@ -5,7 +5,7 @@ using UnityEngine;
 [Serializable] public class FootballRoster {public Footballer[] characters;}
 public static class ArenaRoster {
     static FootballRoster catalog;
-    public static Footballer Get(int index){if(catalog==null){var file=Resources.Load<TextAsset>("Roster");if(!file)throw new InvalidOperationException("Roster.json is missing");catalog=JsonUtility.FromJson<FootballRoster>(file.text);if(catalog.characters.Length!=10)throw new InvalidOperationException("Expected ten footballers");}return catalog.characters[ArenaRosterRules.Clamp(index)];}
+    public static Footballer Get(int index){if(catalog==null){var file=Resources.Load<TextAsset>("Roster");if(!file)throw new InvalidOperationException("Roster.json is missing");catalog=JsonUtility.FromJson<FootballRoster>(file.text);if(catalog.characters.Length!=ArenaRosterRules.Count)throw new InvalidOperationException("Unexpected footballer count");}return catalog.characters[ArenaRosterRules.Clamp(index)];}
     public static Color KitColor(int index){var c=Get(index).jersey;return new Color(c[0],c[1],c[2]);}
     public static GameObject Create(int index,Transform parent,int kit){
         var data=Get(index);var asset=Resources.Load<GameObject>("RosterModels/"+data.id);

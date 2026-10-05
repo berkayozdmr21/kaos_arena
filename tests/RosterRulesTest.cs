@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 class RosterRulesTest {
  static void Main(){int cases=0;
- for(int a=0;a<10;a++)for(int b=0;b<10;b++)for(int c=0;c<10;c++)for(int d=0;d<10;d++){
+ for(int a=0;a<ArenaRosterRules.Count;a++)for(int b=0;b<ArenaRosterRules.Count;b++)for(int c=0;c<ArenaRosterRules.Count;c++)for(int d=0;d<ArenaRosterRules.Count;d++){
   int[] ids={a,b,c,d};bool[] active={true,true,true,true};var kits=ArenaRosterRules.AssignKits(ids,active,null,123);
   if(kits.Distinct().Count()!=4)throw new Exception("Duplicate uniforms");
   for(int i=0;i<4;i++)if(Array.IndexOf(ids,ids[i])==i&&kits[i]!=ids[i])throw new Exception("First choice loses default uniform");

@@ -1,0 +1,32 @@
+[
+  {
+    "id": "Ada",
+    "height": 1.95,
+    "meshes": 83,
+    "joints": 8
+  },
+  {
+    "id": "Selin",
+    "height": 1.95,
+    "meshes": 80,
+    "joints": 8
+  },
+  {
+    "id": "Duru",
+    "height": 1.95,
+    "meshes": 96,
+    "joints": 8
+  },
+  {
+    "id": "Nehir",
+    "height": 1.95,
+    "meshes": 90,
+    "joints": 8
+  },
+  {
+    "id": "Yasmin",
+    "height": 1.95,
+    "meshes": 86,
+    "joints": 8
+  }
+]

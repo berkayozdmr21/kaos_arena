@@ -14,6 +14,7 @@ public static class BuildArena {
         System.IO.Directory.CreateDirectory("Assets/Resources");
         if (!AssetDatabase.LoadAssetAtPath<Material>("Assets/Resources/ArenaStandard.mat"))
             AssetDatabase.CreateAsset(new Material(Shader.Find("Standard")), "Assets/Resources/ArenaStandard.mat");
+        if (!AssetDatabase.LoadAssetAtPath<Material>("Assets/Resources/BeachSky.mat")) AssetDatabase.CreateAsset(new Material(Shader.Find("Skybox/Procedural")), "Assets/Resources/BeachSky.mat");
         AssetDatabase.SaveAssets();
         PlayerSettings.companyName = "KaosArenaPrototype";
         PlayerSettings.productName = "Kaos Arena";
